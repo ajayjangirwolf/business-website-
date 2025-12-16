@@ -30,3 +30,18 @@ How to View This Website
 https://digimize.netlify.app/
 Download the project files.
 Open index.html in your browser.
+
+# DIGIMIZE – AI Clone Agency Website
+
+Live Preview: https://digimize.netlify.app
+
+## Pages
+- Home
+- About
+- Services
+- Contact
+
+## Tech Stack
+- HTML
+- CSS
+- JavaScript
