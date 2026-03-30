@@ -1,0 +1,2478 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BGMI Tournament Scoreboard</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Libraries -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+
+  <style>
+    /* ============================================================
+       THEME VARIABLES
+    ============================================================ */
+    :root {
+      /* Blue Neon (Default) */
+      --bg-deep:     #050a13;
+      --bg-card:     rgba(10, 20, 40, 0.75);
+      --bg-card2:    rgba(15, 30, 60, 0.6);
+      --border:      rgba(0, 210, 255, 0.18);
+      --glow:        #00d2ff;
+      --glow2:       #7c3aed;
+      --primary:     #00d2ff;
+      --primary-dim: rgba(0, 210, 255, 0.15);
+      --accent:      #7c3aed;
+      --accent-dim:  rgba(124, 58, 237, 0.2);
+      --danger:      #ef4444;
+      --success:     #22c55e;
+      --gold:        #fbbf24;
+      --silver:      #94a3b8;
+      --bronze:      #f97316;
+      --text:        #e2e8f0;
+      --text-dim:    #64748b;
+      --heading-font: 'Orbitron', sans-serif;
+      --body-font:    'Inter', sans-serif;
+      --sub-font:     'Rajdhani', sans-serif;
+    }
+
+    [data-theme="red"] {
+      --bg-deep:     #0d0505;
+      --bg-card:     rgba(30, 8, 8, 0.8);
+      --bg-card2:    rgba(40, 10, 10, 0.6);
+      --border:      rgba(239, 68, 68, 0.22);
+      --glow:        #ef4444;
+      --glow2:       #f97316;
+      --primary:     #ef4444;
+      --primary-dim: rgba(239, 68, 68, 0.15);
+      --accent:      #f97316;
+      --accent-dim:  rgba(249, 115, 22, 0.2);
+    }
+
+    [data-theme="minimal"] {
+      --bg-deep:     #0a0a0a;
+      --bg-card:     rgba(20, 20, 20, 0.85);
+      --bg-card2:    rgba(25, 25, 25, 0.65);
+      --border:      rgba(255, 255, 255, 0.08);
+      --glow:        #ffffff;
+      --glow2:       #64748b;
+      --primary:     #e2e8f0;
+      --primary-dim: rgba(226, 232, 240, 0.1);
+      --accent:      #64748b;
+      --accent-dim:  rgba(100, 116, 139, 0.15);
+    }
+
+    /* ============================================================
+       RESET & BASE
+    ============================================================ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: var(--body-font);
+      background-color: var(--bg-deep);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+      line-height: 1.6;
+    }
+
+    /* Animated background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(0,210,255,.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,210,255,.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    body > * { position: relative; z-index: 1; }
+
+    a { text-decoration: none; color: inherit; }
+    ul { list-style: none; }
+    button { cursor: pointer; border: none; background: none; font-family: inherit; }
+    input, select, textarea { font-family: inherit; }
+
+    /* ============================================================
+       SCROLLBAR
+    ============================================================ */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: var(--bg-deep); }
+    ::-webkit-scrollbar-thumb { background: var(--primary-dim); border-radius: 3px; }
+
+    /* ============================================================
+       UTILITY
+    ============================================================ */
+    .hidden { display: none !important; }
+    .text-primary { color: var(--primary); }
+    .text-accent  { color: var(--accent); }
+    .text-danger  { color: var(--danger); }
+    .text-success { color: var(--success); }
+    .text-gold    { color: var(--gold); }
+
+    /* ============================================================
+       GLASSMORPHISM CARD
+    ============================================================ */
+    .glass {
+      background: var(--bg-card);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+    }
+
+    .glass-sm {
+      background: var(--bg-card2);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    /* ============================================================
+       GLOW EFFECTS
+    ============================================================ */
+    .glow-text {
+      color: var(--primary);
+      text-shadow:
+        0 0 10px var(--glow),
+        0 0 30px var(--glow),
+        0 0 60px rgba(0, 210, 255, 0.4);
+    }
+
+    .glow-border {
+      box-shadow:
+        0 0 0 1px var(--border),
+        0 0 20px rgba(0, 210, 255, 0.1),
+        inset 0 0 20px rgba(0, 210, 255, 0.03);
+    }
+
+    .glow-border:hover {
+      box-shadow:
+        0 0 0 1px var(--primary),
+        0 0 30px rgba(0, 210, 255, 0.2),
+        inset 0 0 20px rgba(0, 210, 255, 0.05);
+    }
+
+    /* ============================================================
+       BUTTONS
+    ============================================================ */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-family: var(--sub-font);
+      font-weight: 700;
+      font-size: 1rem;
+      letter-spacing: 0.5px;
+      transition: all 0.25s ease;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(0, 210, 255, 0.25);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 30px rgba(0, 210, 255, 0.4);
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-outline:hover {
+      background: var(--primary-dim);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-danger {
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: var(--danger);
+    }
+
+    .btn-danger:hover {
+      background: rgba(239, 68, 68, 0.25);
+    }
+
+    .btn-success {
+      background: rgba(34, 197, 94, 0.15);
+      border: 1px solid rgba(34, 197, 94, 0.4);
+      color: var(--success);
+    }
+
+    .btn-success:hover {
+      background: rgba(34, 197, 94, 0.25);
+    }
+
+    .btn-sm { padding: 6px 14px; font-size: 0.88rem; }
+    .btn-lg { padding: 14px 32px; font-size: 1.1rem; }
+    .btn-icon { padding: 8px; border-radius: 8px; }
+    .btn:disabled { opacity: 0.45; pointer-events: none; }
+
+    /* ============================================================
+       FORM ELEMENTS
+    ============================================================ */
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-group label {
+      font-family: var(--sub-font);
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .form-control {
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 14px;
+      color: var(--text);
+      font-size: 0.95rem;
+      transition: all 0.2s;
+      width: 100%;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--primary-dim);
+    }
+
+    .form-control::placeholder { color: var(--text-dim); }
+
+    select.form-control option {
+      background: #0a0a1a;
+      color: var(--text);
+    }
+
+    /* ============================================================
+       TOP NAVIGATION BAR
+    ============================================================ */
+    .topbar {
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      background: rgba(5, 10, 19, 0.9);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(20px);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .topbar-logo {
+      font-family: var(--heading-font);
+      font-size: 1.2rem;
+      font-weight: 800;
+      color: var(--primary);
+      text-shadow: 0 0 15px var(--glow);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .topbar-logo .logo-icon {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, var(--primary), var(--accent));
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+    }
+
+    .topbar-nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav-tab {
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-family: var(--sub-font);
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: var(--text-dim);
+      transition: all 0.2s;
+      cursor: pointer;
+      letter-spacing: 0.3px;
+    }
+
+    .nav-tab:hover { color: var(--text); background: var(--bg-card2); }
+    .nav-tab.active {
+      color: var(--primary);
+      background: var(--primary-dim);
+    }
+
+    .topbar-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    /* Auth badge */
+    .auth-badge {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 12px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-dim);
+    }
+
+    .auth-badge.admin { border-color: var(--success); color: var(--success); }
+    .auth-badge .dot {
+      width: 7px; height: 7px;
+      background: currentColor;
+      border-radius: 50%;
+    }
+
+    /* Theme selector */
+    .theme-select {
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 5px 10px;
+      font-size: 0.8rem;
+      cursor: pointer;
+    }
+
+    /* ============================================================
+       SCREENS
+    ============================================================ */
+    .screen {
+      min-height: calc(100vh - 64px);
+      padding: 32px 24px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    /* ============================================================
+       AUTH SCREEN
+    ============================================================ */
+    #screen-auth {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+    }
+
+    .auth-card {
+      width: 100%;
+      max-width: 420px;
+      padding: 40px;
+    }
+
+    .auth-logo {
+      font-family: var(--heading-font);
+      font-size: 1.6rem;
+      font-weight: 900;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+
+    .auth-sub {
+      text-align: center;
+      color: var(--text-dim);
+      margin-bottom: 32px;
+      font-size: 0.9rem;
+    }
+
+    .auth-divider {
+      text-align: center;
+      margin: 16px 0;
+      color: var(--text-dim);
+      font-size: 0.85rem;
+      position: relative;
+    }
+
+    .auth-divider::before, .auth-divider::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      width: 40%;
+      height: 1px;
+      background: var(--border);
+    }
+
+    .auth-divider::before { left: 0; }
+    .auth-divider::after  { right: 0; }
+
+    /* ============================================================
+       SETUP SCREEN
+    ============================================================ */
+    .setup-card {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 40px;
+    }
+
+    .setup-title {
+      font-family: var(--heading-font);
+      font-size: 1.8rem;
+      font-weight: 800;
+      margin-bottom: 6px;
+    }
+
+    .setup-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      margin: 24px 0;
+    }
+
+    .step-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 4px 12px;
+      background: var(--primary-dim);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-family: var(--sub-font);
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--primary);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      margin-bottom: 16px;
+    }
+
+    /* ============================================================
+       TEAM NAMES SCREEN
+    ============================================================ */
+    .team-names-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+      margin: 24px 0;
+    }
+
+    .team-name-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+
+    .team-num {
+      font-family: var(--heading-font);
+      font-size: 0.85rem;
+      font-weight: 800;
+      color: var(--primary);
+      min-width: 30px;
+    }
+
+    /* ============================================================
+       DASHBOARD LAYOUT
+    ============================================================ */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 20px;
+      align-items: start;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      position: sticky;
+      top: 80px;
+    }
+
+    .sidebar-card { padding: 20px; }
+
+    .sidebar-title {
+      font-family: var(--sub-font);
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      margin-bottom: 14px;
+    }
+
+    /* Match list in sidebar */
+    .match-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .match-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-size: 0.88rem;
+    }
+
+    .match-item:hover { border-color: var(--primary); color: var(--primary); }
+
+    .match-item.active {
+      background: var(--primary-dim);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .match-item.done {
+      border-color: rgba(34, 197, 94, 0.3);
+      color: var(--success);
+    }
+
+    .match-status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--text-dim);
+      flex-shrink: 0;
+    }
+
+    .match-item.active .match-status-dot { background: var(--primary); box-shadow: 0 0 8px var(--glow); }
+    .match-item.done .match-status-dot   { background: var(--success); }
+
+    .match-item-name {
+      font-family: var(--sub-font);
+      font-weight: 600;
+      flex: 1;
+      margin: 0 8px;
+    }
+
+    /* Tournament stats bar */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+
+    .stat-box {
+      padding: 14px;
+      border-radius: 10px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      text-align: center;
+    }
+
+    .stat-value {
+      font-family: var(--heading-font);
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--primary);
+      text-shadow: 0 0 10px var(--glow);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      font-family: var(--sub-font);
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* ============================================================
+       SCORE ENTRY PANEL
+    ============================================================ */
+    .score-entry-card { padding: 24px; }
+
+    .match-header {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .match-title {
+      font-family: var(--heading-font);
+      font-size: 1.4rem;
+      font-weight: 800;
+    }
+
+    .match-name-edit {
+      flex: 1;
+      max-width: 240px;
+    }
+
+    .score-table-wrapper { overflow-x: auto; }
+
+    .score-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .score-table th {
+      padding: 10px 14px;
+      text-align: left;
+      font-family: var(--sub-font);
+      font-size: 0.78rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .score-table td {
+      padding: 8px 14px;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      vertical-align: middle;
+    }
+
+    .score-table tbody tr { transition: background 0.2s; }
+    .score-table tbody tr:hover { background: var(--primary-dim); }
+
+    .kill-input {
+      width: 70px;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 10px;
+      color: var(--text);
+      font-size: 0.9rem;
+      text-align: center;
+      transition: all 0.2s;
+    }
+
+    .kill-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 2px var(--primary-dim);
+    }
+
+    .placement-radio {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .place-btn {
+      padding: 4px 10px;
+      border-radius: 5px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      font-family: var(--sub-font);
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text-dim);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .place-btn.active-1st {
+      background: rgba(251,191,36,.15);
+      border-color: var(--gold);
+      color: var(--gold);
+    }
+
+    .place-btn.active-2nd {
+      background: rgba(148,163,184,.15);
+      border-color: var(--silver);
+      color: var(--silver);
+    }
+
+    .score-preview {
+      font-family: var(--heading-font);
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--primary);
+      min-width: 50px;
+      text-align: right;
+    }
+
+    .action-bar {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 20px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* ============================================================
+       LEADERBOARD
+    ============================================================ */
+    .lb-card { padding: 24px; }
+
+    .lb-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .lb-title {
+      font-family: var(--heading-font);
+      font-size: 1.4rem;
+      font-weight: 800;
+    }
+
+    .lb-table-wrap { overflow-x: auto; }
+
+    .lb-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+
+    .lb-table th {
+      padding: 10px 16px;
+      text-align: left;
+      font-family: var(--sub-font);
+      font-size: 0.75rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .lb-table th.right { text-align: right; }
+
+    .lb-row {
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      transition: all 0.4s ease;
+    }
+
+    .lb-row td {
+      padding: 10px 16px;
+      vertical-align: middle;
+    }
+
+    .lb-row td.right { text-align: right; }
+
+    .lb-row:hover { background: var(--primary-dim); }
+
+    /* Rank badge */
+    .rank-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px; height: 32px;
+      border-radius: 8px;
+      font-family: var(--heading-font);
+      font-size: 0.85rem;
+      font-weight: 800;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      color: var(--text-dim);
+    }
+
+    .rank-badge.r1 { background: rgba(251,191,36,.15); border-color: var(--gold); color: var(--gold); }
+    .rank-badge.r2 { background: rgba(148,163,184,.15); border-color: var(--silver); color: var(--silver); }
+    .rank-badge.r3 { background: rgba(249,115,22,.15); border-color: var(--bronze); color: var(--bronze); }
+
+    /* Change indicator */
+    .rank-change {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: var(--sub-font);
+    }
+
+    .rank-change.up   { background: rgba(34,197,94,.15); color: var(--success); }
+    .rank-change.down { background: rgba(239,68,68,.15); color: var(--danger); }
+    .rank-change.same { background: rgba(100,116,139,.1); color: var(--text-dim); }
+
+    .team-name-cell {
+      font-weight: 600;
+      font-family: var(--sub-font);
+      font-size: 0.95rem;
+    }
+
+    .match-score-cell {
+      font-family: var(--heading-font);
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      white-space: nowrap;
+    }
+
+    .match-score-cell .ms { color: var(--text); }
+
+    .total-score-cell {
+      font-family: var(--heading-font);
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--primary);
+      text-shadow: 0 0 8px var(--glow);
+      text-align: right;
+    }
+
+    /* Row highlight for top 3 */
+    .lb-row.top1 { background: rgba(251,191,36, 0.04); }
+    .lb-row.top2 { background: rgba(148,163,184, 0.03); }
+    .lb-row.top3 { background: rgba(249,115,22, 0.03); }
+
+    /* Kill highlights */
+    .kill-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-family: var(--sub-font);
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+
+    /* ============================================================
+       ANALYTICS
+    ============================================================ */
+    .analytics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .chart-card {
+      padding: 24px;
+    }
+
+    .chart-title {
+      font-family: var(--sub-font);
+      font-size: 0.8rem;
+      font-weight: 700;
+      color: var(--text-dim);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 16px;
+    }
+
+    .chart-container {
+      position: relative;
+      height: 280px;
+    }
+
+    /* ============================================================
+       TOAST NOTIFICATION
+    ============================================================ */
+    #toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 9999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast {
+      padding: 12px 20px;
+      border-radius: 10px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+      transform: translateX(100px);
+      opacity: 0;
+      transition: all 0.3s ease;
+      pointer-events: none;
+      max-width: 320px;
+    }
+
+    .toast.show { transform: translateX(0); opacity: 1; }
+    .toast.success { border-color: var(--success); color: var(--success); }
+    .toast.error   { border-color: var(--danger); color: var(--danger); }
+    .toast.info    { border-color: var(--primary); color: var(--primary); }
+
+    /* ============================================================
+       MODAL
+    ============================================================ */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(6px);
+      z-index: 500;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal {
+      width: 100%;
+      max-width: 480px;
+      padding: 32px;
+      animation: modalIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    }
+
+    @keyframes modalIn {
+      from { opacity: 0; transform: scale(0.85) translateY(-20px); }
+      to   { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    .modal-title {
+      font-family: var(--heading-font);
+      font-size: 1.2rem;
+      font-weight: 800;
+      margin-bottom: 20px;
+    }
+
+    /* ============================================================
+       POINTS CONFIG PILL
+    ============================================================ */
+    .config-pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+
+    .config-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 5px 12px;
+      background: var(--bg-card2);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      font-size: 0.8rem;
+      font-family: var(--sub-font);
+      font-weight: 600;
+      color: var(--text-dim);
+    }
+
+    .config-pill span { color: var(--primary); }
+
+    /* ============================================================
+       EXPORT SECTION
+    ============================================================ */
+    .export-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+
+    .export-btn-card {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      transition: all 0.25s;
+      text-align: center;
+    }
+
+    .export-btn-card:hover { transform: translateY(-4px); }
+
+    .export-icon {
+      width: 48px; height: 48px;
+      border-radius: 12px;
+      background: var(--primary-dim);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.4rem;
+    }
+
+    .export-label {
+      font-family: var(--sub-font);
+      font-weight: 700;
+      font-size: 0.9rem;
+      color: var(--text);
+    }
+
+    .export-desc {
+      font-size: 0.78rem;
+      color: var(--text-dim);
+    }
+
+    /* ============================================================
+       SECTION TITLES
+    ============================================================ */
+    .section-title-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      font-family: var(--heading-font);
+      font-size: 1.5rem;
+      font-weight: 800;
+    }
+
+    .section-accent-line {
+      flex: 1;
+      height: 1px;
+      background: linear-gradient(90deg, var(--primary), transparent);
+      opacity: 0.3;
+    }
+
+    /* ============================================================
+       LOADING SPINNER
+    ============================================================ */
+    .spinner {
+      width: 20px; height: 20px;
+      border: 2px solid var(--border);
+      border-top-color: var(--primary);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ============================================================
+       EMPTY STATE
+    ============================================================ */
+    .empty-state {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-dim);
+    }
+
+    .empty-state .icon { font-size: 3rem; margin-bottom: 12px; }
+    .empty-state p { font-size: 0.95rem; }
+
+    /* ============================================================
+       ANIMATED RANK TRANSITION
+    ============================================================ */
+    @keyframes rankUp {
+      0%   { transform: translateY(12px); opacity: 0; }
+      60%  { transform: translateY(-3px); }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+
+    @keyframes rankDown {
+      0%   { transform: translateY(-12px); opacity: 0; }
+      60%  { transform: translateY(3px); }
+      100% { transform: translateY(0); opacity: 1; }
+    }
+
+    .lb-row.anim-up   { animation: rankUp   0.5s ease both; }
+    .lb-row.anim-down { animation: rankDown 0.5s ease both; }
+
+    /* ============================================================
+       RESPONSIVE
+    ============================================================ */
+    @media (max-width: 1024px) {
+      .dashboard-grid { grid-template-columns: 1fr; }
+      .sidebar { position: static; }
+      .analytics-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .topbar { padding: 0 14px; }
+      .topbar-nav { display: none; }
+      .screen { padding: 16px 12px; }
+      .setup-grid { grid-template-columns: 1fr; }
+      .stats-row { grid-template-columns: 1fr 1fr; }
+      .lb-table th, .lb-table td { padding: 8px 10px; }
+      .match-score-cell { display: none; }
+    }
+
+    /* ============================================================
+       PULSE ANIMATION FOR LIVE INDICATOR
+    ============================================================ */
+    .live-dot {
+      display: inline-block;
+      width: 8px; height: 8px;
+      background: var(--success);
+      border-radius: 50%;
+      animation: pulse 1.5s ease infinite;
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4);
+    }
+
+    @keyframes pulse {
+      0%   { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); }
+      70%  { box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+
+    /* ============================================================
+       PROGRESS BAR (for score bars in leaderboard)
+    ============================================================ */
+    .score-bar-wrap {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 120px;
+    }
+
+    .score-bar {
+      flex: 1;
+      height: 4px;
+      background: var(--bg-card2);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .score-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--accent));
+      border-radius: 2px;
+      transition: width 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* ============================================================
+       PLACEMENT LABEL ICONS
+    ============================================================ */
+    .place-icon { font-size: 1rem; }
+  </style>
+</head>
+
+<body>
+
+<!-- ============================================================
+     AUTH SCREEN
+============================================================ -->
+<div id="screen-auth">
+  <div class="glass auth-card">
+    <div class="auth-logo glow-text">⚡ BGMI SCOREBOARD</div>
+    <div class="auth-sub">Enter admin password to manage scores or continue as viewer</div>
+
+    <div class="form-group" style="margin-bottom:16px;">
+      <label>Admin Password</label>
+      <input id="auth-password" type="password" class="form-control" placeholder="Enter password…" />
+    </div>
+
+    <button class="btn btn-primary btn-lg" style="width:100%;margin-bottom:12px;" onclick="authLogin()">
+      🔐 Login as Admin
+    </button>
+
+    <div class="auth-divider">or</div>
+
+    <button class="btn btn-ghost btn-lg" style="width:100%;margin-top:12px;" onclick="authViewer()">
+      👁 Continue as Viewer
+    </button>
+
+    <p style="text-align:center;margin-top:20px;font-size:0.78rem;color:var(--text-dim);">
+      Default admin password: <strong style="color:var(--primary)">bgmi2024</strong>
+    </p>
+  </div>
+</div>
+
+<!-- ============================================================
+     MAIN APP (hidden until auth)
+============================================================ -->
+<div id="app" class="hidden">
+
+  <!-- TOP BAR -->
+  <nav class="topbar">
+    <div class="topbar-logo">
+      <div class="logo-icon">⚡</div>
+      BGMI ARENA
+    </div>
+
+    <div class="topbar-nav">
+      <div class="nav-tab active" id="tab-setup"      onclick="switchTab('setup')">Setup</div>
+      <div class="nav-tab"        id="tab-scores"     onclick="switchTab('scores')">Scores</div>
+      <div class="nav-tab"        id="tab-leaderboard" onclick="switchTab('leaderboard')">Leaderboard</div>
+      <div class="nav-tab"        id="tab-analytics"  onclick="switchTab('analytics')">Analytics</div>
+      <div class="nav-tab"        id="tab-export"     onclick="switchTab('export')">Export</div>
+    </div>
+
+    <div class="topbar-right">
+      <span class="live-dot"></span>
+      <span id="auth-badge" class="auth-badge">
+        <span class="dot"></span>
+        <span id="auth-label">Viewer</span>
+      </span>
+      <select class="theme-select" onchange="setTheme(this.value)">
+        <option value="">🔵 Blue Neon</option>
+        <option value="red">🔴 Red Aggressive</option>
+        <option value="minimal">⚫ Dark Minimal</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="resetConfirm()">Reset</button>
+    </div>
+  </nav>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: SETUP
+  ══════════════════════════════════════════ -->
+  <div id="screen-setup" class="screen">
+    <!-- Step 1: Tournament Config -->
+    <div id="step-config" class="glass setup-card">
+      <div class="step-badge">⚙ Step 1 — Tournament Config</div>
+      <div class="setup-title">Configure Your Tournament</div>
+      <p style="color:var(--text-dim);font-size:0.9rem;margin-bottom:4px;">
+        Set up match format and point system before the tournament begins.
+      </p>
+
+      <div class="setup-grid">
+        <div class="form-group">
+          <label>Total Teams</label>
+          <input type="number" id="cfg-teams" class="form-control" min="2" max="32" value="16" placeholder="e.g. 16" />
+        </div>
+        <div class="form-group">
+          <label>Total Matches</label>
+          <input type="number" id="cfg-matches" class="form-control" min="1" max="20" value="6" placeholder="e.g. 6" />
+        </div>
+        <div class="form-group">
+          <label>Points Per Kill</label>
+          <input type="number" id="cfg-kill-pts" class="form-control" min="1" max="10" value="1" />
+        </div>
+        <div class="form-group">
+          <label>1st Place Points</label>
+          <input type="number" id="cfg-1st" class="form-control" min="0" max="50" value="12" />
+        </div>
+        <div class="form-group">
+          <label>2nd Place Points</label>
+          <input type="number" id="cfg-2nd" class="form-control" min="0" max="30" value="9" />
+        </div>
+        <div class="form-group">
+          <label>Last Place Points</label>
+          <input type="number" id="cfg-last" class="form-control" min="0" max="10" value="0" />
+        </div>
+      </div>
+
+      <button class="btn btn-primary btn-lg" onclick="proceedToTeamNames()">
+        Next: Enter Team Names →
+      </button>
+    </div>
+
+    <!-- Step 2: Team Names -->
+    <div id="step-teams" class="glass setup-card hidden" style="margin-top:20px;">
+      <div class="step-badge">👥 Step 2 — Team Names</div>
+      <div class="setup-title">Name Your Teams</div>
+      <p style="color:var(--text-dim);font-size:0.9rem;margin-bottom:4px;">
+        Enter unique names for each participating team.
+      </p>
+
+      <div id="team-names-grid" class="team-names-grid"></div>
+
+      <div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;">
+        <button class="btn btn-ghost" onclick="showStep('config')">← Back</button>
+        <button class="btn btn-primary btn-lg" onclick="startTournament()">
+          🚀 Start Tournament
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: SCORES
+  ══════════════════════════════════════════ -->
+  <div id="screen-scores" class="screen hidden">
+    <div class="dashboard-grid">
+
+      <!-- Sidebar -->
+      <div class="sidebar">
+        <div class="glass sidebar-card">
+          <div class="sidebar-title">📅 Matches</div>
+          <div id="match-list" class="match-list"></div>
+        </div>
+
+        <div class="glass sidebar-card">
+          <div class="sidebar-title">⚙ Points Config</div>
+          <div id="config-pills" class="config-pills"></div>
+        </div>
+
+        <div class="glass sidebar-card">
+          <div class="sidebar-title">📊 Progress</div>
+          <div id="stats-row" class="stats-row"></div>
+        </div>
+      </div>
+
+      <!-- Main panel -->
+      <div>
+        <div id="score-entry-panel" class="glass score-entry-card">
+          <!-- Injected dynamically -->
+          <div class="empty-state">
+            <div class="icon">🎮</div>
+            <p>Select a match from the sidebar to enter scores.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: LEADERBOARD
+  ══════════════════════════════════════════ -->
+  <div id="screen-leaderboard" class="screen hidden">
+    <div class="section-title-row">
+      <div class="section-title glow-text">🏆 Live Leaderboard</div>
+      <div class="section-accent-line"></div>
+      <span class="live-dot"></span>
+    </div>
+
+    <div id="lb-stats" class="stats-row" style="max-width:500px;margin-bottom:20px;"></div>
+
+    <div class="glass lb-card">
+      <div class="lb-header">
+        <div class="lb-title">Overall Rankings</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="btn btn-outline btn-sm" onclick="switchTab('export')">📥 Export</button>
+        </div>
+      </div>
+
+      <div class="lb-table-wrap">
+        <table class="lb-table" id="leaderboard-table">
+          <thead>
+            <tr>
+              <th style="width:50px;">Rank</th>
+              <th>Team</th>
+              <th>Kills</th>
+              <th class="match-score-cell">Match Scores</th>
+              <th class="right">Total Score</th>
+              <th style="width:80px;">Δ Rank</th>
+            </tr>
+          </thead>
+          <tbody id="lb-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: ANALYTICS
+  ══════════════════════════════════════════ -->
+  <div id="screen-analytics" class="screen hidden">
+    <div class="section-title-row">
+      <div class="section-title glow-text">📈 Analytics</div>
+      <div class="section-accent-line"></div>
+    </div>
+
+    <div class="analytics-grid">
+      <div class="glass chart-card">
+        <div class="chart-title">🏆 Top Teams — Total Score</div>
+        <div class="chart-container">
+          <canvas id="chart-total"></canvas>
+        </div>
+      </div>
+      <div class="glass chart-card">
+        <div class="chart-title">🔫 Top Teams — Total Kills</div>
+        <div class="chart-container">
+          <canvas id="chart-kills"></canvas>
+        </div>
+      </div>
+      <div class="glass chart-card">
+        <div class="chart-title">📊 Score Breakdown (Kill vs Placement)</div>
+        <div class="chart-container">
+          <canvas id="chart-breakdown"></canvas>
+        </div>
+      </div>
+      <div class="glass chart-card">
+        <div class="chart-title">🎯 Per-Match Top Scorers</div>
+        <div class="chart-container">
+          <canvas id="chart-per-match"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════════════════════
+       SCREEN: EXPORT
+  ══════════════════════════════════════════ -->
+  <div id="screen-export" class="screen hidden">
+    <div class="section-title-row">
+      <div class="section-title glow-text">📥 Export Data</div>
+      <div class="section-accent-line"></div>
+    </div>
+
+    <div class="glass" style="padding:24px;max-width:800px;">
+      <p style="color:var(--text-dim);margin-bottom:8px;font-size:0.9rem;">
+        Export the current tournament data in multiple formats for offline use, printing, or sharing.
+      </p>
+
+      <div class="export-grid">
+        <div class="glass-sm export-btn-card" onclick="exportExcel()">
+          <div class="export-icon">📊</div>
+          <div class="export-label">Excel (.xlsx)</div>
+          <div class="export-desc">Full leaderboard + match breakdown</div>
+        </div>
+        <div class="glass-sm export-btn-card" onclick="exportPDF()">
+          <div class="export-icon">📄</div>
+          <div class="export-label">PDF Report</div>
+          <div class="export-desc">Printable leaderboard with branding</div>
+        </div>
+        <div class="glass-sm export-btn-card" onclick="exportJSON()">
+          <div class="export-icon">💾</div>
+          <div class="export-label">JSON Backup</div>
+          <div class="export-desc">Full raw tournament data</div>
+        </div>
+        <div class="glass-sm export-btn-card" onclick="importJSON()">
+          <div class="export-icon">📤</div>
+          <div class="export-label">Import JSON</div>
+          <div class="export-desc">Restore a previous tournament</div>
+        </div>
+      </div>
+
+      <input type="file" id="import-file-input" accept=".json" class="hidden" onchange="handleImport(event)" />
+    </div>
+  </div>
+
+</div><!-- /#app -->
+
+<!-- ============================================================
+     TOAST CONTAINER
+============================================================ -->
+<div id="toast-container"></div>
+
+<!-- ============================================================
+     RESET CONFIRM MODAL
+============================================================ -->
+<div id="modal-reset" class="modal-overlay hidden">
+  <div class="glass modal">
+    <div class="modal-title text-danger">⚠ Reset Tournament?</div>
+    <p style="color:var(--text-dim);margin-bottom:24px;font-size:0.9rem;">
+      This will erase ALL tournament data including team names, scores, and config.
+      This action cannot be undone.
+    </p>
+    <div style="display:flex;gap:12px;justify-content:flex-end;">
+      <button class="btn btn-ghost" onclick="closeModal('modal-reset')">Cancel</button>
+      <button class="btn btn-danger" onclick="doReset()">Yes, Reset Everything</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     MAIN JAVASCRIPT
+============================================================ -->
+<script>
+/* ============================================================
+   STATE
+============================================================ */
+const STATE_KEY = 'bgmi_tournament_v2';
+
+let state = {
+  config: {
+    teams: 16,
+    matches: 6,
+    killPts: 1,
+    pts1st: 12,
+    pts2nd: 9,
+    ptsLast: 0
+  },
+  teams: [],       // [{ id, name }]
+  matches: [],     /* [{
+    id, name, done,
+    scores: [{ teamId, kills, placement }]   placement: 1 | 2 | 'last' | null
+  }] */
+  currentMatchId: null,
+  isAdmin: false,
+  previousRanks: {}
+};
+
+/* ============================================================
+   PERSISTENCE
+============================================================ */
+function saveState() {
+  try { localStorage.setItem(STATE_KEY, JSON.stringify(state)); } catch(e) {}
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STATE_KEY);
+    if (raw) { Object.assign(state, JSON.parse(raw)); }
+  } catch(e) {}
+}
+
+/* ============================================================
+   AUTH
+   The password is compared against its SHA-256 hash so the
+   plaintext never appears in the source.  Default: bgmi2024
+============================================================ */
+const ADMIN_PASSWORD_HASH = 'a64cb3247f3479dc35c4badecedfad616ad8b232bdf400699dcdc9c33a770697';
+
+async function sha256(str) {
+  const buf  = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function authLogin() {
+  const pw = document.getElementById('auth-password').value.trim();
+  sha256(pw).then(hash => {
+  if (hash === ADMIN_PASSWORD_HASH) {
+    state.isAdmin = true;
+    document.getElementById('auth-label').textContent = 'Admin';
+    const badge = document.getElementById('auth-badge');
+    badge.classList.add('admin');
+    showApp();
+    showToast('Logged in as Admin', 'success');
+  } else {
+    showToast('Incorrect password', 'error');
+    document.getElementById('auth-password').value = '';
+    document.getElementById('auth-password').focus();
+  }
+  });
+}
+
+function authViewer() {
+  state.isAdmin = false;
+  document.getElementById('auth-label').textContent = 'Viewer';
+  showApp();
+  showToast('Joined as Viewer', 'info');
+}
+
+function showApp() {
+  document.getElementById('screen-auth').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  initApp();
+}
+
+/* ============================================================
+   INIT
+============================================================ */
+function initApp() {
+  loadState();
+  if (state.teams.length > 0) {
+    // Tournament already started – jump to scores tab
+    renderMatchList();
+    renderConfigPills();
+    renderStatsRow();
+    renderLeaderboard();
+    switchTab('scores');
+    if (state.currentMatchId) {
+      renderScoreEntry(state.currentMatchId);
+    }
+  } else {
+    switchTab('setup');
+  }
+  enforceAuth();
+}
+
+function enforceAuth() {
+  // Hide admin-only controls for viewers
+  document.querySelectorAll('.admin-only').forEach(el => {
+    el.style.display = state.isAdmin ? '' : 'none';
+  });
+}
+
+/* ============================================================
+   THEME
+============================================================ */
+function setTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  // Refresh charts after theme change
+  setTimeout(renderCharts, 50);
+}
+
+/* ============================================================
+   TABS
+============================================================ */
+const SCREENS = ['setup', 'scores', 'leaderboard', 'analytics', 'export'];
+
+function switchTab(tab) {
+  SCREENS.forEach(s => {
+    document.getElementById(`screen-${s}`).classList.add('hidden');
+    const t = document.getElementById(`tab-${s}`);
+    if (t) t.classList.remove('active');
+  });
+  document.getElementById(`screen-${tab}`).classList.remove('hidden');
+  const t = document.getElementById(`tab-${tab}`);
+  if (t) t.classList.add('active');
+
+  if (tab === 'leaderboard') { renderLeaderboard(); renderLbStats(); }
+  if (tab === 'analytics') { setTimeout(renderCharts, 60); }
+  if (tab === 'scores') { renderMatchList(); renderConfigPills(); renderStatsRow(); }
+}
+
+/* ============================================================
+   SETUP: STEP 1 → 2
+============================================================ */
+function showStep(step) {
+  document.getElementById('step-config').classList.toggle('hidden', step !== 'config');
+  document.getElementById('step-teams').classList.toggle('hidden', step !== 'teams');
+}
+
+function proceedToTeamNames() {
+  const teams   = parseInt(document.getElementById('cfg-teams').value) || 16;
+  const matches = parseInt(document.getElementById('cfg-matches').value) || 6;
+
+  if (teams < 2 || teams > 32) return showToast('Teams must be between 2-32', 'error');
+  if (matches < 1 || matches > 20) return showToast('Matches must be between 1-20', 'error');
+
+  state.config.teams   = teams;
+  state.config.matches = matches;
+  state.config.killPts = parseInt(document.getElementById('cfg-kill-pts').value) || 1;
+  state.config.pts1st  = parseInt(document.getElementById('cfg-1st').value) || 12;
+  state.config.pts2nd  = parseInt(document.getElementById('cfg-2nd').value) || 9;
+  state.config.ptsLast = parseInt(document.getElementById('cfg-last').value) || 0;
+
+  buildTeamNamesGrid();
+  showStep('teams');
+}
+
+function buildTeamNamesGrid() {
+  const grid = document.getElementById('team-names-grid');
+  grid.innerHTML = '';
+  const existing = state.teams || [];
+  for (let i = 0; i < state.config.teams; i++) {
+    const defaultName = (existing[i] && existing[i].name) || `Team ${i+1}`;
+    grid.innerHTML += `
+      <div class="team-name-item">
+        <span class="team-num">#${i+1}</span>
+        <input
+          class="form-control"
+          id="tname-${i}"
+          placeholder="Team ${i+1}"
+          value="${escapeHtml(defaultName)}"
+          maxlength="24"
+        />
+      </div>`;
+  }
+}
+
+/* ============================================================
+   START TOURNAMENT
+============================================================ */
+function startTournament() {
+  const names = [];
+  for (let i = 0; i < state.config.teams; i++) {
+    const n = (document.getElementById(`tname-${i}`).value || `Team ${i+1}`).trim();
+    names.push(n);
+  }
+
+  // Check duplicates
+  const nameSet = new Set(names.map(n => n.toLowerCase()));
+  if (nameSet.size !== names.length) return showToast('All team names must be unique!', 'error');
+
+  state.teams = names.map((name, i) => ({ id: i, name }));
+  state.matches = Array.from({ length: state.config.matches }, (_, i) => ({
+    id: i,
+    name: defaultMatchName(i),
+    done: false,
+    scores: state.teams.map(t => ({ teamId: t.id, kills: 0, placement: null }))
+  }));
+  state.currentMatchId = 0;
+  state.previousRanks = {};
+
+  saveState();
+  showToast('Tournament started! 🚀', 'success');
+  switchTab('scores');
+  renderMatchList();
+  renderConfigPills();
+  renderStatsRow();
+  renderScoreEntry(0);
+}
+
+const DEFAULT_MATCH_NAMES = ['Erangel', 'Miramar', 'Sanhok', 'Vikendi', 'Karakin', 'Deston', 'Nusa', 'Rondo',
+  'Match 9', 'Match 10', 'Match 11', 'Match 12', 'Match 13', 'Match 14', 'Match 15',
+  'Match 16', 'Match 17', 'Match 18', 'Match 19', 'Match 20'];
+function defaultMatchName(i) { return DEFAULT_MATCH_NAMES[i] || `Match ${i+1}`; }
+
+/* ============================================================
+   MATCH LIST SIDEBAR
+============================================================ */
+function renderMatchList() {
+  if (!state.matches.length) return;
+  const el = document.getElementById('match-list');
+  el.innerHTML = state.matches.map((m, i) => `
+    <div class="match-item ${m.id === state.currentMatchId ? 'active' : ''} ${m.done ? 'done' : ''}"
+         onclick="selectMatch(${m.id})">
+      <span class="match-status-dot"></span>
+      <span class="match-item-name">${escapeHtml(m.name)}</span>
+      <span style="font-size:0.75rem;color:var(--text-dim)">${m.done ? '✓' : `M${i+1}`}</span>
+    </div>`).join('');
+}
+
+function selectMatch(id) {
+  state.currentMatchId = id;
+  renderMatchList();
+  renderScoreEntry(id);
+}
+
+/* ============================================================
+   CONFIG PILLS
+============================================================ */
+function renderConfigPills() {
+  const c = state.config;
+  document.getElementById('config-pills').innerHTML = `
+    <div class="config-pill">🔫 Kill: <span>+${c.killPts}</span></div>
+    <div class="config-pill">🥇 1st: <span>+${c.pts1st}</span></div>
+    <div class="config-pill">🥈 2nd: <span>+${c.pts2nd}</span></div>
+    <div class="config-pill">💀 Last: <span>+${c.ptsLast}</span></div>`;
+}
+
+/* ============================================================
+   STATS ROW
+============================================================ */
+function renderStatsRow() {
+  const done = state.matches.filter(m => m.done).length;
+  const total = state.matches.length;
+  document.getElementById('stats-row').innerHTML = `
+    <div class="stat-box">
+      <div class="stat-value">${done}</div>
+      <div class="stat-label">Done</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${total - done}</div>
+      <div class="stat-label">Left</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${state.teams.length}</div>
+      <div class="stat-label">Teams</div>
+    </div>`;
+}
+
+/* ============================================================
+   SCORE ENTRY
+============================================================ */
+function renderScoreEntry(matchId) {
+  const m = state.matches.find(x => x.id === matchId);
+  if (!m) return;
+
+  const isAdmin = state.isAdmin;
+  const disabled = !isAdmin ? 'disabled' : '';
+
+  const rows = state.teams.map(team => {
+    const sc = m.scores.find(s => s.teamId === team.id) || { kills: 0, placement: null };
+    const score = calcMatchScore(sc.kills, sc.placement);
+    return `
+      <tr id="sr-${matchId}-${team.id}">
+        <td>
+          <span style="font-family:var(--sub-font);font-weight:700;">${escapeHtml(team.name)}</span>
+        </td>
+        <td>
+          <input
+            type="number"
+            class="kill-input"
+            id="kill-${matchId}-${team.id}"
+            value="${sc.kills}"
+            min="0" max="99"
+            ${disabled}
+            oninput="onKillChange(${matchId},${team.id},this.value)"
+          />
+        </td>
+        <td>
+          <div class="placement-radio">
+            <button
+              class="place-btn ${sc.placement === 1 ? 'active-1st' : ''}"
+              id="p1-${matchId}-${team.id}"
+              onclick="${isAdmin ? `setPlacement(${matchId},${team.id},1)` : 'viewerBlock()'}"
+            >🥇 1st</button>
+            <button
+              class="place-btn ${sc.placement === 2 ? 'active-2nd' : ''}"
+              id="p2-${matchId}-${team.id}"
+              onclick="${isAdmin ? `setPlacement(${matchId},${team.id},2)` : 'viewerBlock()'}"
+            >🥈 2nd</button>
+          </div>
+        </td>
+        <td>
+          <span class="score-preview" id="sp-${matchId}-${team.id}">${score}</span>
+        </td>
+      </tr>`;
+  }).join('');
+
+  document.getElementById('score-entry-panel').innerHTML = `
+    <div class="match-header">
+      <div class="match-title">
+        🎮 ${escapeHtml(m.name)}
+      </div>
+      ${isAdmin ? `
+        <input
+          class="form-control match-name-edit"
+          value="${escapeHtml(m.name)}"
+          maxlength="24"
+          placeholder="Match name…"
+          oninput="renameMatch(${matchId},this.value)"
+        />
+        <span class="step-badge" style="margin-bottom:0">${m.done ? '✅ Complete' : '🔴 In Progress'}</span>
+      ` : `<span class="step-badge" style="margin-bottom:0">${m.done ? '✅ Complete' : '🔴 In Progress'}</span>`}
+    </div>
+
+    <div class="score-table-wrapper">
+      <table class="score-table">
+        <thead>
+          <tr>
+            <th>Team</th>
+            <th>Kills</th>
+            <th>Placement</th>
+            <th style="text-align:right;">Match Score</th>
+          </tr>
+        </thead>
+        <tbody id="score-tbody">${rows}</tbody>
+      </table>
+    </div>
+
+    ${isAdmin ? `
+      <div class="action-bar">
+        <button class="btn btn-primary" onclick="saveMatchScores(${matchId})">
+          💾 Save Scores
+        </button>
+        <button class="btn btn-success" onclick="finishMatch(${matchId})">
+          ✅ Mark Complete
+        </button>
+        <button class="btn btn-ghost" onclick="clearMatchScores(${matchId})">
+          🗑 Clear Match
+        </button>
+        <button class="btn btn-outline btn-sm" onclick="switchTab('leaderboard')">
+          📋 View Leaderboard
+        </button>
+      </div>
+    ` : '<div class="action-bar"><button class="btn btn-outline" onclick="switchTab(\'leaderboard\')">📋 View Leaderboard</button></div>'}`;
+}
+
+function viewerBlock() {
+  showToast('Admin access required to edit scores', 'error');
+}
+
+function onKillChange(matchId, teamId, value) {
+  const m = state.matches.find(x => x.id === matchId);
+  if (!m) return;
+  const sc = m.scores.find(s => s.teamId === teamId);
+  if (sc) { sc.kills = parseInt(value) || 0; }
+  updateScorePreview(matchId, teamId);
+}
+
+function setPlacement(matchId, teamId, place) {
+  const m = state.matches.find(x => x.id === matchId);
+  if (!m) return;
+
+  // Remove placement from any team that previously had it
+  m.scores.forEach(sc => {
+    if (sc.placement === place) {
+      sc.placement = null;
+      document.getElementById(`p${place}-${matchId}-${sc.teamId}`)?.classList.remove(`active-${place === 1 ? '1st' : '2nd'}`);
+      updateScorePreview(matchId, sc.teamId);
+    }
+  });
+
+  const sc = m.scores.find(s => s.teamId === teamId);
+  if (!sc) return;
+
+  if (sc.placement === place) {
+    sc.placement = null;
+    document.getElementById(`p${place}-${matchId}-${teamId}`)?.classList.remove(`active-${place === 1 ? '1st' : '2nd'}`);
+  } else {
+    sc.placement = place;
+    document.getElementById(`p${place}-${matchId}-${teamId}`)?.classList.add(`active-${place === 1 ? '1st' : '2nd'}`);
+  }
+
+  updateScorePreview(matchId, teamId);
+}
+
+function updateScorePreview(matchId, teamId) {
+  const m = state.matches.find(x => x.id === matchId);
+  if (!m) return;
+  const sc = m.scores.find(s => s.teamId === teamId);
+  if (!sc) return;
+  const el = document.getElementById(`sp-${matchId}-${teamId}`);
+  if (el) el.textContent = calcMatchScore(sc.kills, sc.placement);
+}
+
+function saveMatchScores(matchId) {
+  // Sync kill values from inputs in DOM
+  const m = state.matches.find(x => x.id === matchId);
+  if (!m) return;
+  m.scores.forEach(sc => {
+    const inp = document.getElementById(`kill-${matchId}-${sc.teamId}`);
+    if (inp) sc.kills = parseInt(inp.value) || 0;
+  });
+
+  saveState();
+  renderLeaderboard();
+  showToast(`Match ${matchId + 1} scores saved!`, 'success');
+}
+
+function finishMatch(matchId) {
+  const m = state.matches.find(x => x.id === matchId);
+  if (!m) return;
+
+  // Sync kill inputs
+  m.scores.forEach(sc => {
+    const inp = document.getElementById(`kill-${matchId}-${sc.teamId}`);
+    if (inp) sc.kills = parseInt(inp.value) || 0;
+  });
+
+  // Assign 'last' to teams without placement
+  const placed = m.scores.filter(s => s.placement === 1 || s.placement === 2).map(s => s.teamId);
+  m.scores.forEach(sc => {
+    if (!placed.includes(sc.teamId)) sc.placement = 'last';
+  });
+
+  // Capture previous ranks before updating
+  const prevRanks = computeRankedTeams();
+  state.previousRanks = {};
+  prevRanks.forEach((t, idx) => { state.previousRanks[t.id] = idx + 1; });
+
+  m.done = true;
+  saveState();
+  renderMatchList();
+  renderStatsRow();
+  renderScoreEntry(matchId);
+  renderLeaderboard();
+  showToast(`✅ Match "${m.name}" completed!`, 'success');
+}
+
+function clearMatchScores(matchId) {
+  const m = state.matches.find(x => x.id === matchId);
+  if (!m) return;
+  m.scores.forEach(sc => { sc.kills = 0; sc.placement = null; });
+  m.done = false;
+  saveState();
+  renderScoreEntry(matchId);
+  renderMatchList();
+  renderStatsRow();
+  showToast('Match scores cleared', 'info');
+}
+
+function renameMatch(matchId, name) {
+  const m = state.matches.find(x => x.id === matchId);
+  if (m) { m.name = name; saveState(); renderMatchList(); }
+}
+
+/* ============================================================
+   SCORING LOGIC
+============================================================ */
+function calcMatchScore(kills, placement) {
+  const c = state.config;
+  let pts = (kills || 0) * c.killPts;
+  if (placement === 1)      pts += c.pts1st;
+  else if (placement === 2) pts += c.pts2nd;
+  else if (placement === 'last') pts += c.ptsLast;
+  return pts;
+}
+
+function computeRankedTeams() {
+  return state.teams.map(team => {
+    let totalScore = 0, totalKills = 0;
+    const matchScores = [];
+
+    state.matches.forEach(m => {
+      const sc = m.scores.find(s => s.teamId === team.id);
+      if (sc) {
+        const ms = calcMatchScore(sc.kills, sc.placement);
+        totalScore += ms;
+        totalKills += (sc.kills || 0);
+        matchScores.push({ matchName: m.name, score: ms, kills: sc.kills || 0, done: m.done });
+      } else {
+        matchScores.push({ matchName: m.name, score: 0, kills: 0, done: false });
+      }
+    });
+
+    return { ...team, totalScore, totalKills, matchScores };
+  }).sort((a, b) => b.totalScore - a.totalScore || b.totalKills - a.totalKills);
+}
+
+/* ============================================================
+   LEADERBOARD
+============================================================ */
+function renderLeaderboard() {
+  const ranked = computeRankedTeams();
+  const tbody = document.getElementById('lb-tbody');
+  if (!tbody) return;
+
+  const maxScore = ranked[0]?.totalScore || 1;
+
+  tbody.innerHTML = ranked.map((team, idx) => {
+    const rank = idx + 1;
+    const prev = state.previousRanks[team.id];
+    let changeHtml = '<span class="rank-change same">—</span>';
+    if (prev !== undefined && prev !== rank) {
+      if (rank < prev) changeHtml = `<span class="rank-change up">▲ ${prev - rank}</span>`;
+      else             changeHtml = `<span class="rank-change down">▼ ${rank - prev}</span>`;
+    }
+
+    const rowClass = rank === 1 ? 'top1' : rank === 2 ? 'top2' : rank === 3 ? 'top3' : '';
+    const badge    = rank === 1 ? 'r1'   : rank === 2 ? 'r2'   : rank === 3 ? 'r3'   : '';
+
+    const matchScoresCells = team.matchScores.map((ms, i) =>
+      ms.done
+        ? `<span class="ms" title="${escapeHtml(ms.matchName)}">${ms.score}</span>`
+        : `<span style="color:var(--text-dim)" title="${escapeHtml(ms.matchName)}">–</span>`
+    ).join(' · ');
+
+    const barPct = maxScore > 0 ? Math.round((team.totalScore / maxScore) * 100) : 0;
+
+    return `
+      <tr class="lb-row ${rowClass}" data-team="${team.id}">
+        <td>
+          <span class="rank-badge ${badge}">${rank}</span>
+        </td>
+        <td>
+          <span class="team-name-cell">${escapeHtml(team.name)}</span>
+        </td>
+        <td>
+          <span class="kill-badge">🔫 ${team.totalKills}</span>
+        </td>
+        <td class="match-score-cell">
+          <span class="match-score-cell">${matchScoresCells}</span>
+        </td>
+        <td class="right">
+          <div class="score-bar-wrap" style="justify-content:flex-end">
+            <div class="score-bar">
+              <div class="score-bar-fill" style="width:${barPct}%"></div>
+            </div>
+            <span class="total-score-cell">${team.totalScore}</span>
+          </div>
+        </td>
+        <td>${changeHtml}</td>
+      </tr>`;
+  }).join('');
+}
+
+function renderLbStats() {
+  const ranked = computeRankedTeams();
+  const totalKills = ranked.reduce((s, t) => s + t.totalKills, 0);
+  const done = state.matches.filter(m => m.done).length;
+  const el = document.getElementById('lb-stats');
+  if (!el) return;
+  el.innerHTML = `
+    <div class="stat-box">
+      <div class="stat-value">${ranked[0]?.totalScore || 0}</div>
+      <div class="stat-label">Top Score</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${totalKills}</div>
+      <div class="stat-label">Total Kills</div>
+    </div>
+    <div class="stat-box">
+      <div class="stat-value">${done}/${state.matches.length}</div>
+      <div class="stat-label">Matches</div>
+    </div>`;
+}
+
+/* ============================================================
+   CHARTS
+============================================================ */
+const charts = {};
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function chartDefaults() {
+  const style = getComputedStyle(document.documentElement);
+  return {
+    primary: style.getPropertyValue('--glow').trim() || '#00d2ff',
+    accent:  style.getPropertyValue('--glow2').trim() || '#7c3aed',
+    text:    style.getPropertyValue('--text').trim()   || '#e2e8f0',
+    dim:     style.getPropertyValue('--text-dim').trim() || '#64748b',
+    grid:    style.getPropertyValue('--border').trim() || 'rgba(0,210,255,0.18)'
+  };
+}
+
+function renderCharts() {
+  const ranked = computeRankedTeams();
+  if (!ranked.length) return;
+
+  const top = ranked.slice(0, 10);
+  const labels = top.map(t => t.name);
+  const cd = chartDefaults();
+
+  const pluginsConfig = {
+    legend: { labels: { color: cd.text, font: { family: 'Rajdhani', size: 13 } } },
+    tooltip: { backgroundColor: 'rgba(5,10,19,0.9)', titleColor: cd.primary, bodyColor: cd.text }
+  };
+
+  const scalesConfig = {
+    x: {
+      ticks: { color: cd.dim, font: { family: 'Rajdhani', size: 12 } },
+      grid:  { color: cd.grid }
+    },
+    y: {
+      ticks: { color: cd.dim, font: { family: 'Rajdhani', size: 12 } },
+      grid:  { color: cd.grid }
+    }
+  };
+
+  // ---- Chart 1: Total Score Bar ----
+  destroyChart('total');
+  const ctx1 = document.getElementById('chart-total')?.getContext('2d');
+  if (ctx1) {
+    charts['total'] = new Chart(ctx1, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Total Score',
+          data: top.map(t => t.totalScore),
+          backgroundColor: top.map((_, i) =>
+            i === 0 ? 'rgba(251,191,36,0.7)' : i === 1 ? 'rgba(148,163,184,0.7)' : i === 2 ? 'rgba(249,115,22,0.6)' : `rgba(0,210,255,${0.3 + 0.03 * (10 - i)})`
+          ),
+          borderColor: top.map((_, i) =>
+            i === 0 ? '#fbbf24' : i === 1 ? '#94a3b8' : i === 2 ? '#f97316' : cd.primary
+          ),
+          borderWidth: 2,
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: pluginsConfig,
+        scales: scalesConfig
+      }
+    });
+  }
+
+  // ---- Chart 2: Total Kills ----
+  destroyChart('kills');
+  const ctx2 = document.getElementById('chart-kills')?.getContext('2d');
+  if (ctx2) {
+    charts['kills'] = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: 'Total Kills',
+          data: top.map(t => t.totalKills),
+          backgroundColor: `rgba(239,68,68,0.55)`,
+          borderColor: '#ef4444',
+          borderWidth: 2,
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: pluginsConfig,
+        scales: scalesConfig
+      }
+    });
+  }
+
+  // ---- Chart 3: Score Breakdown (stacked) ----
+  destroyChart('breakdown');
+  const ctx3 = document.getElementById('chart-breakdown')?.getContext('2d');
+  if (ctx3) {
+    const killScores  = top.map(t => t.totalKills * state.config.killPts);
+    const placeScores = top.map(t => t.totalScore - t.totalKills * state.config.killPts);
+    charts['breakdown'] = new Chart(ctx3, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: 'Kill Score',
+            data: killScores,
+            backgroundColor: 'rgba(239,68,68,0.55)',
+            borderColor: '#ef4444',
+            borderWidth: 1,
+            borderRadius: 4,
+            stack: 'stack'
+          },
+          {
+            label: 'Placement Score',
+            data: placeScores,
+            backgroundColor: `rgba(0,210,255,0.5)`,
+            borderColor: cd.primary,
+            borderWidth: 1,
+            borderRadius: 4,
+            stack: 'stack'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: pluginsConfig,
+        scales: { ...scalesConfig, y: { ...scalesConfig.y, stacked: true }, x: { ...scalesConfig.x, stacked: true } }
+      }
+    });
+  }
+
+  // ---- Chart 4: Per-match top scorers (line) ----
+  destroyChart('per-match');
+  const ctx4 = document.getElementById('chart-per-match')?.getContext('2d');
+  if (ctx4 && state.matches.length > 0) {
+    const matchLabels = state.matches.map(m => m.name);
+    const top5 = ranked.slice(0, 5);
+    const colors = [cd.primary, '#fbbf24', '#ef4444', '#a855f7', '#22c55e'];
+
+    charts['per-match'] = new Chart(ctx4, {
+      type: 'line',
+      data: {
+        labels: matchLabels,
+        datasets: top5.map((team, i) => ({
+          label: team.name,
+          data: team.matchScores.map(ms => ms.done ? ms.score : null),
+          borderColor: colors[i],
+          backgroundColor: `${colors[i]}22`,
+          tension: 0.3,
+          pointRadius: 5,
+          pointBackgroundColor: colors[i],
+          fill: false,
+          spanGaps: false
+        }))
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: pluginsConfig,
+        scales: scalesConfig
+      }
+    });
+  }
+}
+
+/* ============================================================
+   EXPORT: EXCEL
+============================================================ */
+function exportExcel() {
+  if (!window.XLSX) return showToast('XLSX library not loaded', 'error');
+  const ranked = computeRankedTeams();
+  if (!ranked.length) return showToast('No data to export', 'error');
+
+  const wb = XLSX.utils.book_new();
+
+  // Sheet 1: Leaderboard
+  const lbData = [
+    ['Rank', 'Team', 'Total Kills', 'Total Score', ...state.matches.map(m => m.name)]
+  ];
+  ranked.forEach((t, i) => {
+    lbData.push([
+      i + 1,
+      t.name,
+      t.totalKills,
+      t.totalScore,
+      ...t.matchScores.map(ms => ms.done ? ms.score : '')
+    ]);
+  });
+  const wsLb = XLSX.utils.aoa_to_sheet(lbData);
+  XLSX.utils.book_append_sheet(wb, wsLb, 'Leaderboard');
+
+  // Sheet 2: Kills per match
+  const killData = [['Team', ...state.matches.map(m => m.name)]];
+  ranked.forEach(t => {
+    killData.push([t.name, ...t.matchScores.map(ms => ms.kills)]);
+  });
+  const wsKills = XLSX.utils.aoa_to_sheet(killData);
+  XLSX.utils.book_append_sheet(wb, wsKills, 'Kills Per Match');
+
+  XLSX.writeFile(wb, 'BGMI_Tournament_Scores.xlsx');
+  showToast('Excel exported! 📊', 'success');
+}
+
+/* ============================================================
+   EXPORT: PDF
+============================================================ */
+async function exportPDF() {
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+
+    // Header
+    doc.setFillColor(5, 10, 19);
+    doc.rect(0, 0, 297, 210, 'F');
+
+    doc.setTextColor(0, 210, 255);
+    doc.setFontSize(22);
+    doc.setFont('helvetica', 'bold');
+    doc.text('BGMI TOURNAMENT SCOREBOARD', 148.5, 20, { align: 'center' });
+
+    doc.setTextColor(100, 116, 139);
+    doc.setFontSize(10);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 148.5, 28, { align: 'center' });
+
+    // Table header
+    const ranked = computeRankedTeams();
+    const cols   = ['Rank', 'Team', 'Kills', 'Total Score'];
+    const colW   = [20, 70, 25, 35];
+    let y = 40;
+
+    doc.setFillColor(15, 30, 60);
+    doc.rect(14, y - 6, 269, 10, 'F');
+    doc.setTextColor(0, 210, 255);
+    doc.setFontSize(9);
+    let x = 15;
+    cols.forEach((col, i) => {
+      doc.text(col, x, y);
+      x += colW[i];
+    });
+
+    y += 8;
+    ranked.forEach((t, idx) => {
+      if (y > 190) { doc.addPage(); y = 20; }
+
+      if (idx % 2 === 0) {
+        doc.setFillColor(10, 20, 40);
+        doc.rect(14, y - 5, 269, 8, 'F');
+      }
+
+      x = 15;
+      const rankColors = [[251,191,36],[148,163,184],[249,115,22]];
+      if (rankColors[idx]) doc.setTextColor(...rankColors[idx]);
+      else doc.setTextColor(226, 232, 240);
+
+      doc.setFontSize(8);
+      doc.text(`#${idx+1}`, x, y); x += colW[0];
+      doc.text(t.name.substring(0, 25), x, y); x += colW[1];
+      doc.text(String(t.totalKills), x, y); x += colW[2];
+      doc.setTextColor(0, 210, 255);
+      doc.text(String(t.totalScore), x, y);
+
+      y += 8;
+    });
+
+    doc.save('BGMI_Tournament.pdf');
+    showToast('PDF exported! 📄', 'success');
+  } catch (e) {
+    showToast('PDF export failed: ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+/* ============================================================
+   EXPORT / IMPORT JSON
+============================================================ */
+function exportJSON() {
+  const data = JSON.stringify(state, null, 2);
+  const blob = new Blob([data], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'bgmi_tournament_backup.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('JSON backup saved! 💾', 'success');
+}
+
+function importJSON() {
+  document.getElementById('import-file-input').click();
+}
+
+function handleImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const imported = JSON.parse(e.target.result);
+      if (!imported.teams || !imported.matches) throw new Error('Invalid format');
+      Object.assign(state, imported);
+      saveState();
+      initApp();
+      showToast('Tournament data imported! ✅', 'success');
+    } catch(err) {
+      showToast('Invalid file: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  event.target.value = '';
+}
+
+/* ============================================================
+   RESET
+============================================================ */
+function resetConfirm() {
+  document.getElementById('modal-reset').classList.remove('hidden');
+}
+
+function closeModal(id) {
+  document.getElementById(id).classList.add('hidden');
+}
+
+function doReset() {
+  closeModal('modal-reset');
+  state.teams = [];
+  state.matches = [];
+  state.currentMatchId = null;
+  state.previousRanks = {};
+  saveState();
+  showToast('Tournament reset', 'info');
+  switchTab('setup');
+  showStep('config');
+}
+
+/* ============================================================
+   TOAST
+============================================================ */
+function showToast(msg, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  container.appendChild(toast);
+  setTimeout(() => toast.classList.add('show'), 10);
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 400);
+  }, 3000);
+}
+
+/* ============================================================
+   UTILITIES
+============================================================ */
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/* ============================================================
+   KEYBOARD SHORTCUTS
+============================================================ */
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.key === '1') switchTab('setup');
+  if (e.key === '2') switchTab('scores');
+  if (e.key === '3') switchTab('leaderboard');
+  if (e.key === '4') switchTab('analytics');
+  if (e.key === '5') switchTab('export');
+});
+
+/* Listen for Enter on auth screen */
+document.getElementById('auth-password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') authLogin();
+});
+</script>
+</body>
+</html>
